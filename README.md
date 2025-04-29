@@ -21,7 +21,7 @@ You can install the development version of ImputationR like so:
 if (! require("devtools")) install.packages("devtools")
 
 # Install ImputeR from GitHub
-devtools::install_github("your-username/ImputationR")
+devtools::install_github("jianvhuang/missing_data_imputation")
 ```
 
 ## Example
