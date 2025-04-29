@@ -1,0 +1,30 @@
+Package: ImputationR
+Title: A Pipeline for Missing Data Imputation
+Version: 0.0.0.9000
+Authors@R: 
+    person("Jingyi", "Gao" , email = "jingyi010@e.ntu.edu.com", role = c("aut", "cre"))
+Description: This package provides tools for comparing and implementing multiple 
+    methods for imputing missing data in mixed-type datasets. It includes Random Forest, 
+    KNN, MICE, and MiceRanger methods, along with visualization and reporting tools.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Imports:
+    tidyr,
+    dplyr,
+    mice,
+    caret,
+    DMwR2,
+    polycor,
+    ggplot2,
+    VIM,
+    patchwork,
+    reshape2,
+    missForest,
+    miceRanger,
+    rmarkdown,
+Suggests:
+    knitr,
+    tinytex
+VignetteBuilder: knitr
