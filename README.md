@@ -29,9 +29,11 @@ devtools::install_github("jianvhuang/missing_data_imputation")
 This is a basic example which shows you how to solve a common problem:
 
 ``` r
-devtools::load_all()
 rm(list = ls())
+devtools::load_all()
 library(ImputationR)
+# Load all dependencies with one command
+ImputationR::load_imputation_dependencies()
 ```
 This example uses the blood_storage dataset from the medicaldata package. We introduce additional missing value for demonstration purpose.
 ``` r
@@ -73,7 +75,6 @@ data_selected[continuous_vars] <- lapply(data_selected[continuous_vars], as.nume
 
 # Check data types
 str(data_selected)
-
 ```
 
 ## basic example code

@@ -23,7 +23,8 @@ run_imputation_analysis(
   mice_m = 5,
   mice_maxit = 10,
   micer_num_trees = 100,
-  user_defined_features = NULL
+  user_defined_features = NULL,
+  methods = c("rf", "knn", "mice", "mice_rf")
 )
 }
 \arguments{
@@ -38,8 +39,6 @@ run_imputation_analysis(
 \item{info_vars}{Vector of identifier variable names (default: NULL)}
 
 \item{dir_output}{Directory where output files will be saved}
-
-\item{dir_sourcecode}{Directory containing source code files}
 
 \item{data_file_name}{Name of the dataset for the report (default: "data")}
 
@@ -64,6 +63,8 @@ run_imputation_analysis(
 \item{micer_num_trees}{Number of trees for miceRanger (default: 100)}
 
 \item{user_defined_features}{Additional features to include in imputation (default: NULL)}
+
+\item{methods}{Methods used to simulate imputation (default: "rf", "knn", "mice", "mice_rf")}
 }
 \value{
 A list containing imputation results
@@ -84,27 +85,4 @@ This function executes a complete imputation analysis workflow:
 \item Applies the selected method to the dataset
 \item Generates a comprehensive report
 }
-}
-\examples{
-\dontrun{
-# Load example data
-data(mtcars)
-
-# Add some missing values
-set.seed(123)
-mtcars_missing <- mtcars
-mtcars_missing[sample(1:nrow(mtcars) * ncol(mtcars), 30)] <- NA
-
-# Run imputation analysis
-result <- run_imputation_analysis(
-  data = mtcars_missing,
-  continuous_vars = c("mpg", "disp", "hp", "drat", "wt", "qsec"),
-  ordinal_vars = c("cyl", "gear", "carb"),
-  nominal_vars = c("vs", "am"),
-  dir_output = "imputation_results/",
-  dir_sourcecode = "code/",
-  data_file_name = "mtcars"
-)
-}
-
 }

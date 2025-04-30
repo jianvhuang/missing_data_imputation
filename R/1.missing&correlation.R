@@ -64,7 +64,9 @@ check_missing_values <- function(data, dir_output, filename_prefix = "data_selec
          plot = missing_plot, width = 10, height = 6, dpi = 300)
   message("Missing values barplot saved to: ", dir_output)
 
-  return(raw_missing_rate)
+  return(list(raw_missing_rate,
+         barplot = missing_plot,
+         patternplot = output_file))
 }
 
 
@@ -248,5 +250,10 @@ check_correlation <- function(data, continuous_vars, dir_output) {
   }
   cor_vars <- unique(cor_vars)
 
-  return(cor_vars)
+  return(list(
+    cor_vars = cor_vars,
+    cor_plot_cont = cor_plot_cont,
+    cor_plot_all = cor_plot_all,
+    cor_sample_size_plot = sample_plot
+  ))
 }

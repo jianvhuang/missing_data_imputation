@@ -38,26 +38,6 @@
 #'   \item Generates a comprehensive report
 #' }
 #'
-#' @examples
-#' \dontrun{
-#' # Load example data
-#' data(mtcars)
-#'
-#' # Add some missing values
-#' set.seed(123)
-#' mtcars_missing <- mtcars
-#' mtcars_missing[sample(1:nrow(mtcars) * ncol(mtcars), 30)] <- NA
-#'
-#' # Run imputation analysis
-#' result <- run_imputation_analysis(
-#'   data = mtcars_missing,
-#'   continuous_vars = c("mpg", "disp", "hp", "drat", "wt", "qsec"),
-#'   ordinal_vars = c("cyl", "gear", "carb"),
-#'   nominal_vars = c("vs", "am"),
-#'   dir_output = "imputation_results/",
-#'   data_file_name = "mtcars"
-#' )
-#' }
 #'
 #' @importFrom dplyr select mutate across
 #' @importFrom rmarkdown render
@@ -125,8 +105,11 @@ run_imputation_analysis <- function(
   data_selected[continuous_vars] <- lapply(data_selected[continuous_vars], as.numeric)
 
   # Missing value and correlation analysis
-  raw_missing_rate <- check_missing_values(data_selected, dir_output)
-  cor_vars <- check_correlation(data_selected, continuous_vars, dir_output)
+  result_missing <- check_missing_values(data_selected, dir_output)
+  raw_missing_rate <- result_missing[[1]]
+
+  result_correlation <- check_correlation(data_selected, continuous_vars, dir_output)
+  cor_vars <- result_correlation$cor_vars
 
   # Variables used to impute
   if (is.null(user_defined_features)) {

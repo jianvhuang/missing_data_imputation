@@ -1,19 +1,406 @@
 ---
-title: "imputation-guide"
-output: rmarkdown::html_vignette
+title: "ImputationR: A Pipeline for Missing Data Imputation"
+author: "Your Name"
+date: "`r Sys.Date()`"
+output: 
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 3
 vignette: >
-  %\VignetteIndexEntry{imputation-guide}
+  %\VignetteIndexEntry{ImputationR: A Pipeline for Missing Data Imputation}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
 
-```{r, include = FALSE}
+```{r setting, include = FALSE}
 knitr::opts_chunk$set(
   collapse = TRUE,
-  comment = "#>"
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5,
+  fig.align = "center",
+  warning = FALSE,
+  message = FALSE
 )
 ```
 
-```{r setup}
-library(ImputationR)
+```{r load_rscripts, include=FALSE}
+source("../R/1.missing&correlation.R")
+source("../R/2.imputation.R")
+source("../R/analysis.R")
 ```
+
+## Introduction
+
+Missing data is a common challenge in data analysis that can significantly impact statistical inference, model performance, and research conclusions. The `ImputationR` package offers a comprehensive solution for missing data imputation by comparing multiple methods. The package provides a systematic workflow that includes:
+
+1. Missing data pattern analysis
+2. Correlation analysis to identify relevant variables
+3. Comparison of multiple imputation methods
+4. Automatic selection of the best-performing method
+5. Implementation of the selected method
+6. Comprehensive reporting of results
+
+This vignette provides a detailed guide to using the `ImputationR` package, demonstrating its functionality with the `blood_storage` dataset from the `medicaldata` package.
+
+## Installation
+
+You can install the `ImputationR` package directly from GitHub:
+
+```{r load_github, warning=FALSE}
+# Install devtools if you haven't already
+if (!requireNamespace("devtools", quietly = TRUE)) {
+  install.packages("devtools")
+}
+
+# Install ImputationR from GitHub
+# devtools::install_github("jianvhuang/missing_data_imputation")
+```
+
+The package requires several dependencies, which will be automatically installed:
+
+```{r load_libraries, warning=FALSE}
+devtools::load_all()
+library(ImputationR)
+# Load all dependencies with one command
+ImputationR::load_imputation_dependencies()
+
+# Create output directory
+dir_output <- "../example"
+cat("Output will be saved to:", dir_output, "\n")
+```
+
+## Detailed Workflow
+
+The following sections describe the components of the `ImputationR` workflow in detail.
+
+```{r load_data}
+# This example uses the blood_storage dataset from the medicaldata package. We introduce additional missing value for demonstration purpose.
+data <- read.csv("../data/blood_storage_add_missing.csv", check.names = FALSE)
+```
+
+
+### Data Preparation
+
+Before imputation, it's crucial to properly prepare the data by specifying the correct variable types:
+
+- **Continuous variables**: Numeric variables with continuous values
+- **Ordinal variables**: Categorical variables with ordered levels
+- **Nominal variables**: Categorical variables with unordered levels
+- **Information variables** (optional): Identifier variables not to be used in imputation
+
+The package automatically converts variables to the appropriate R data types:
+
+```{r data_preparation, warning=FALSE}
+# Define variable types
+# Store information column (demographic/identifier variables)
+info_vars <- NULL
+info_data <- data %>% select(all_of(info_vars))
+
+continuous_vars <- c("Median.RBC.Age", "Age", "PVol", "PreopPSA","Units", "TimeToRecurrence")
+ordinal_vars <- c("RBC.Age.Group", "TVol", "T.Stage", "bGS", "sGS")
+nominal_vars <- c("AA", "FamHx", "BN+", "OrganConfined", "PreopTherapy", "AnyAdjTherapy", "AdjRadTherapy", "Recurrence", "Censor")
+categorical_vars <- c(ordinal_vars, nominal_vars)
+
+# Select relevant variables
+selected_vars <- c(continuous_vars, categorical_vars)
+data_selected <- data %>% select(all_of(selected_vars))
+
+# convert data types
+data_selected <- data_selected %>%
+  mutate(across(all_of(ordinal_vars), ~ factor(., ordered = TRUE)), 
+         across(all_of(nominal_vars), as.factor)) 
+
+lapply(data_selected[ordinal_vars], levels)
+
+data_selected[categorical_vars] <- lapply(data_selected[categorical_vars], as.factor)
+data_selected[continuous_vars] <- lapply(data_selected[continuous_vars], as.numeric)
+
+# Check data types
+str(data_selected)
+```
+
+### Missing Value Analysis
+
+The `check_missing_values()` function analyzes the patterns of missing data in the dataset:
+
+```{r check-missing-values, warning=FALSE}
+missing_result <- check_missing_values(
+  data = data_selected, 
+  dir_output = dir_output
+)
+```
+
+```{r show-missing-plots, echo=FALSE, fig.align='center', out.width='80%'}
+missing_result$barplot
+knitr::include_graphics(missing_result$patternplot)
+```
+
+
+This function:
+
+1. Calculates the overall missing rate in the dataset
+2. Creates a missing pattern visualization using `VIM::aggr`
+3. Generates a bar plot of missing values by variable
+4. Saves all visualizations to the specified output directory
+
+Understanding the patterns of missingness is critical for selecting appropriate imputation methods. The package distinguishes between:
+
+- **Missing Completely at Random (MCAR)**: Missing values have no relationship with any data values
+- **Missing at Random (MAR)**: Missing values may be related to observed data
+- **Missing Not at Random (MNAR)**: Missing values are related to unobserved data
+
+### Correlation Analysis
+
+The `check_correlation()` function analyzes relationships between variables:
+
+```{r check_correlation, warning=FALSE}
+cor_vars <- check_correlation(
+  data = data_selected, 
+  continuous_vars = continuous_vars, 
+  dir_output = dir_output
+)
+```
+
+```{r show-correlation-plots, echo=FALSE, fig.align='center', out.width='90%'}
+cor_vars$cor_plot_cont
+cor_vars$cor_plot_all
+cor_vars$cor_sample_size_plot
+```
+
+This function:
+
+Calculate the correlation coefficient using maximum sample sizes
+
+1. Calculates correlations for continuous variables using Pearson correlation
+2. Calculates correlations between all variables using appropriate methods:
+
+   - Pearson for numeric-numeric pairs
+   
+   - Polychoric for categorical-categorical pairs
+   
+   - Polyserial for numeric-categorical pairs
+   
+3. Creates heatmaps for visualizing correlations
+4. Identifies variables with high correlation (|r| > 0.5)
+
+Variables with strong correlations are particularly useful for imputation, as they help predict missing values more accurately.
+
+### Method Comparison
+
+The `MI_func()` function (called by `run_imputation_analysis()`) compares multiple imputation methods:
+
+```{r methods, warning=FALSE}
+result <- MI_func(data_selected = data_selected, 
+                  dir_output = dir_output, 
+                  info_vars = NULL,
+                  list_noNA = c(0.1, 0.2),
+                  seed = 123,
+                  niter = 2,
+                  ntree = 50,
+                  maxiter = 5,
+                  k_values = c(3, 5, 7),
+                  mice_m = 3,
+                  mice_maxit = 5,
+                  micer_num_trees = 50,
+                  selected_features = NULL,
+                  methods = c("rf", "mice")) 
+```
+
+The comparison process involves:
+
+1. Creating complete data by removing rows with missing values
+2. Simulating various missing rates (from the `list_noNA` parameter)
+3. Running each imputation method on the simulated data
+4. Evaluating performance using:
+   - Mean Squared Error (MSE) for continuous variables
+   - Accuracy for categorical variables
+5. Selecting the best-performing method for the actual data
+
+## Imputation Methods
+
+The package implements four imputation methods:
+
+### Random Forest (missForest)
+
+Random Forest imputation uses the `missForest` package to build ensembles of decision trees:
+
+- **Advantages**: Handles mixed-type data, captures non-linear relationships
+- **Parameters**: 
+  - `ntree`: Number of trees to grow in each forest
+  - `maxiter`: Maximum number of iterations
+
+
+### K-Nearest Neighbors (KNN)
+
+KNN imputation uses the `DMwR2` package to impute values based on similar observations:
+
+- **Advantages**: Simple, works well with locally structured data
+- **Parameters**:
+  - `k_values`: Number of neighbors to consider (multiple values can be tested)
+
+
+### Multivariate Imputation by Chained Equations (MICE)
+
+MICE imputation uses the `mice` package to implement an iterative approach:
+
+- **Advantages**: Accounts for uncertainty, preserves relationships between variables
+- **Parameters**:
+  - `mice_m`: Number of multiple imputations
+  - `mice_maxit`: Maximum number of iterations
+  - `method`: Imputation method for each variable type
+      - pmm (predictive mean matching) for numeric,
+      - logreg (logistic regression) for binary,
+      - polr (proportional odds logistic regression) for ordered,
+      - polyreg (polytomous logistic regression) for unordered factors
+
+
+### MICE with Random Forest (miceRanger)
+
+miceRanger combines MICE with Random Forest using the `miceRanger` package:
+
+- **Advantages**: Combines benefits of MICE and Random Forest
+- **Parameters**:
+  - `mice_m`: Number of multiple imputations
+  - `mice_maxit`: Maximum number of iterations
+  - `micer_num_trees`: Number of trees in each forest
+
+
+## Example with Blood Storage Dataset
+
+Let's walk through a complete example using the `blood_storage` dataset from the `medicaldata` package. This dataset contains information about red blood cell storage duration and prostate cancer outcomes.
+
+Although the `blood_storage` dataset is an excellent example due to its diverse variable types (continuous, ordinal, and nominal), it has a very low original missing rate of only about 0.5%. 
+
+For demonstration purposes, we'll artificially introduce additional missing values to simulate a more realistic missing data scenario with a 15% missing rate. This better represents real-world data challenges and will better demonstrate the capabilities of the imputation methods.
+
+```{r example, warning=FALSE}
+# Load required libraries
+library(ImputationR)
+library(dplyr)
+
+# Run imputation analysis
+result <- run_imputation_analysis(
+  data = data_selected,
+  continuous_vars = continuous_vars,
+  ordinal_vars = ordinal_vars,
+  nominal_vars = nominal_vars,
+  info_vars = NULL,
+  dir_output = dir_output,
+  data_file_name = "blood_storage_example",
+  output_file_name = "blood_imputation_report.pdf",
+  # Simplified for demonstration, all these paramters can be adjusted
+  list_noNA = c(0.05, 0.1, 0.15, 0.2),
+  seed = 123,
+  niter = 2,
+  ntree = 50,
+  maxiter = 5,
+  k_values = c(3, 5, 7),
+  mice_m = 3,
+  mice_maxit = 5,
+  micer_num_trees = 50,
+  user_defined_features = NULL,
+  methods = c("rf", "mice")
+) 
+```
+
+### Understanding the Results
+
+The `run_imputation_analysis()` function returns a list of results and generates a comprehensive report:
+
+```{r model_results}
+# Accessing results
+names(result)
+
+# Best model selected
+result$best_model
+
+# Performance metrics
+result$performance
+```
+
+The report includes:
+
+1. **Dataset Overview**: Summary of variable types and missing values
+2. **Missing Value Analysis**: Patterns of missingness and visualization
+3. **Correlation Analysis**: Heatmaps and identified correlations
+4. **Method Comparison**: Performance metrics for each method
+5. **Imputation Results**: Comparison of data before and after imputation
+6. **Implementation Details**: Parameters used
+
+### Interpreting Visualizations
+
+The package generates several visualizations to help understand the data and imputation results:
+
+1. **Missing Pattern Plot**: Shows patterns of missing values
+2. **Correlation Heatmaps**: Visualize relationships between variables
+3. **Method Performance Plot**: Compares MSE and accuracy across methods
+4. **Before-After Boxplots**: Compare distributions before and after imputation
+5. **Before-After Density Plots**: Compare continuous variable distributions
+6. **Before-After Barplots**: Compare categorical variable distributions
+
+```{r visualization, echo=FALSE, fig.align='center', out.width='100%'}
+# View the combined plot for method comparison
+result$combined_plot
+
+# View boxplots comparing before and after imputation
+result$final_boxplot
+
+# View density plots comparing before and after imputation
+result$final_density_plot
+
+# View bar plots comparing before and after imputation
+result$final_barplot
+```
+
+## Advanced Usage
+
+### Customizing Analysis Parameters
+
+You can customize various parameters to optimize the imputation process:
+
+```{r parameters}
+# Example with customized parameters
+# A list of missing data proportions to simulate (e.g., 5%, 10%, ..., 50%)
+list_noNA = c(0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5)
+
+# Random seed to ensure reproducibility
+seed = 123
+
+# Number of iterations to repeat the entire simulation process
+niter = 10
+
+# number of trees to grow in each forest.
+ntree = 100
+
+# maximum number of iterations (in random forest) to be performed given the stopping criterion is not met beforehand.
+maxiter = 10
+
+# A vector of K values to test for KNN imputation (e.g., K = 3, 5, 7)
+k_values = c(3, 5, 7)
+
+# Number of multiple imputations to perform in MICE
+mice_m = 5
+
+# A scalar giving the number of iterations
+mice_maxit = 10
+
+# The number of decision trees in miceForest
+micer_num_trees = 100
+
+# Methods used to simulate imputation
+methods = c("rf", "knn", "mice", "mice_rf")
+```
+
+## Conclusion
+
+The `ImputationR` package provides a comprehensive framework for missing data imputation. By comparing multiple methods and providing detailed visualizations, it helps researchers select the most appropriate imputation approach for their specific dataset.
+
+Key benefits of the package include:
+
+1. **Comprehensive workflow**: From data preparation to final report
+2. **Method comparison**: Objective selection of the best-performing method
+3. **Detailed visualizations**: For understanding missing patterns and imputation results
+4. **Customizability**: Multiple parameters for optimization
+
+

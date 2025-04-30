@@ -17,7 +17,8 @@ MI_func(
   micer_num_trees = 100,
   seed = 123,
   niter = 10,
-  selected_features = NULL
+  selected_features = NULL,
+  methods = c("rf", "knn", "mice", "mice_rf")
 )
 }
 \arguments{
@@ -46,6 +47,8 @@ MI_func(
 \item{niter}{Number of iterations for each missing rate simulation.}
 
 \item{selected_features}{Optional vector of feature names to use for imputation.}
+
+\item{methods}{Methods used to simulate imputation.}
 }
 \value{
 A list containing:
@@ -62,6 +65,7 @@ A list containing:
 \item final_density_plot: Density plots of continuous variables before and after imputation.
 \item final_barplot: Bar plots of categorical variables before and after imputation.
 \item output_file_name: The name of the output file where imputed data is saved.
+\item methods_used: The name of used methods.
 }
 \description{
 This function performs multiple imputation using various methods
@@ -80,7 +84,9 @@ result <- MI_func(
   mice_maxit = 10,
   micer_num_trees = 100,
   seed = 123,
-  niter = 5
+  niter = 5,
+  selected_features = selected_features,
+  methods = c("rf", "knn", "mice", "mice_rf")
 )
 }
 
