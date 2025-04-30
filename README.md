@@ -129,3 +129,10 @@ The primary output of `run_imputation_analysis()` is a list containing:
 
 Additionally, the function generates a PDF report in the specified output directory, containing visualizations and detailed analysis of the imputation process.
 
+## Documentation
+
+For a comprehensive guide on using ImputationR, please refer to the package vignette:
+
+```r
+vignette("imputation-guide", package = "ImputationR")
+```
