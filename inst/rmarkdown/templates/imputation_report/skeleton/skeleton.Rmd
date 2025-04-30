@@ -32,6 +32,7 @@ params:
   micer_num_trees: NULL
   seed: NULL
   niter: NULL
+  methods_used: NULL
 ---
 
 ```{r setup, include=FALSE}
@@ -118,6 +119,9 @@ cat(paste0("- Number of decision trees in MiceRanger  (`micer_num_trees`): ", pa
 cat(paste0("- Random seed (`seed`): ", params$seed, "  \n"))
 
 cat(paste0("- Number of iterations (`niter`): ", params$niter, "  \n"))
+
+cat(paste0("- Methods used to simulate imputation (`methods`): ",
+           paste(params$methods_used, collapse = ", "), "\n"))
 ```
 
 \newpage

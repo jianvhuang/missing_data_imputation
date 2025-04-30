@@ -16,6 +16,7 @@
 #' @param seed Random seed for reproducibility.
 #' @param niter Number of iterations for each missing rate simulation.
 #' @param selected_features Optional vector of feature names to use for imputation.
+#' @param methods Methods used to simulate imputation.
 #'
 #' @importFrom dplyr %>% filter arrange slice group_by summarise ungroup distinct select
 #' @importFrom missForest missForest prodNA
@@ -42,6 +43,7 @@
 #'   \item final_density_plot: Density plots of continuous variables before and after imputation.
 #'   \item final_barplot: Bar plots of categorical variables before and after imputation.
 #'   \item output_file_name: The name of the output file where imputed data is saved.
+#'   \item methods_used: The name of used methods.
 #'
 #' @examples
 #' \dontrun{
@@ -56,7 +58,9 @@
 #'   mice_maxit = 10,
 #'   micer_num_trees = 100,
 #'   seed = 123,
-#'   niter = 5
+#'   niter = 5,
+#'   selected_features = selected_features,
+#'   methods = c("rf", "knn", "mice", "mice_rf")
 #' )
 #' }
 #'
@@ -75,7 +79,8 @@ MI_func <- function(data_selected,
                     micer_num_trees = 100,
                     seed = 123,
                     niter = 10,
-                    selected_features = NULL) {
+                    selected_features = NULL,
+                    methods = c("rf", "knn", "mice", "mice_rf")) {
 
   if (!dir.exists(dir_output)) dir.create(dir_output, recursive = TRUE)
   dir_imputed <- file.path(dir_output, "imputed dataset")
@@ -177,6 +182,29 @@ MI_func <- function(data_selected,
   raw_missing_rate <- sum(is.na(data_selected)) / prod(dim(data_selected))
   selected_features <- colnames(data_selected)
 
+  # Validate the methods parameter
+  valid_methods <- c("rf", "knn", "mice", "mice_rf")
+  invalid_methods <- setdiff(methods, valid_methods)
+
+  if (length(invalid_methods) > 0) {
+    warning("Invalid methods specified: ", paste(invalid_methods, collapse=", "),
+            ". Using only valid methods.")
+    methods <- intersect(methods, valid_methods)
+  }
+
+  if (length(methods) == 0) {
+    stop("No valid imputation methods specified. Please choose from: 'rf', 'knn', 'mice', 'mice_rf'")
+  }
+
+  # Map method codes to full names for results
+  method_names <- c(
+    "rf" = "RandomForest",
+    "knn" = "KNN",
+    "mice" = "MICE",
+    "mice_rf" = "miceRanger"
+  )
+
+  selected_method_names <- method_names[methods]
 
   agg_results_all <- data.frame()
 
@@ -206,372 +234,380 @@ MI_func <- function(data_selected,
       cat_vars <- names(which(sapply(complete_data, is.factor)))
 
       ## Random Forest
-      cat("\nRunning missForest...\n")
-      imputed_data_rf <- missForest(subset_train_data, ntree = ntree, maxiter = maxiter, xtrue = complete_data, verbose = TRUE)
-      imputed_rf <- imputed_data_rf$ximp
+      if("rf" %in% methods) {
+        cat("\nRunning missForest...\n")
+        imputed_data_rf <- missForest(subset_train_data, ntree = ntree, maxiter = maxiter, xtrue = complete_data, verbose = TRUE)
+        imputed_rf <- imputed_data_rf$ximp
 
-      mse_rf <- mean((as.matrix(imputed_rf[, num_vars]) - as.matrix(complete_data[, num_vars]))^2, na.rm = TRUE)
-      acc_rf <- mean(sapply(cat_vars, function(var) mean(imputed_rf[[var]] == complete_data[[var]], na.rm = TRUE)))
+        mse_rf <- mean((as.matrix(imputed_rf[, num_vars]) - as.matrix(complete_data[, num_vars]))^2, na.rm = TRUE)
+        acc_rf <- mean(sapply(cat_vars, function(var) mean(imputed_rf[[var]] == complete_data[[var]], na.rm = TRUE)))
 
-      results <- rbind(results, data.frame(Method = "RandomForest", Iteration = i, MSE = mse_rf, Categorical_Accuracy = acc_rf, K_Value = NA, Missing_Rate = missing_rate))
-
+        results <- rbind(results, data.frame(Method = "RandomForest", Iteration = i, MSE = mse_rf, Categorical_Accuracy = acc_rf, K_Value = NA, Missing_Rate = missing_rate))
+      }
 
 
       ## KNN
-      knn_results <- data.frame(K = k_values, MSE = NA, Accuracy = NA)
+      if("knn" %in% methods) {
+        knn_results <- data.frame(K = k_values, MSE = NA, Accuracy = NA)
 
-      for (k in k_values) {
-        cat(sprintf("\nRunning KNN, K = %d...\n", k))
+        for (k in k_values) {
+          cat(sprintf("\nRunning KNN, K = %d...\n", k))
 
-        if (sum(is.na(subset_train_data)) == 0) {
-          imputed_knn <- subset_train_data
-        } else {
-          complete_cases <- subset_train_data[complete.cases(subset_train_data), ]
-          if (nrow(complete_cases) < k || ncol(subset_train_data) < 2) {
-            next
+          if (sum(is.na(subset_train_data)) == 0) {
+            imputed_knn <- subset_train_data
           } else {
-            subset_train_data_temp <- as.data.frame(lapply(subset_train_data, function(x) if (is.factor(x)) as.numeric(as.character(x)) else x))
-            imputed_knn <- tryCatch({
-              knnImputation(subset_train_data_temp, k = k)
-            }, error = function(e) subset_train_data_temp)
-          }
-        }
-
-        available_num_vars <- intersect(num_vars, colnames(imputed_knn))
-        if (length(available_num_vars) > 0) {
-          mse_knn <- mean((as.matrix(imputed_knn[, available_num_vars]) - as.matrix(complete_data[, available_num_vars]))^2, na.rm = TRUE)
-        } else {
-          mse_knn <- NA
-        }
-
-        available_cat_vars <- intersect(cat_vars, colnames(imputed_knn))
-        if (length(available_cat_vars) > 0) {
-          acc_values <- sapply(available_cat_vars, function(var) {
-            if (var %in% colnames(imputed_knn) && var %in% colnames(complete_data)) {
-              mean(imputed_knn[[var]] == complete_data[[var]], na.rm = TRUE)
+            complete_cases <- subset_train_data[complete.cases(subset_train_data), ]
+            if (nrow(complete_cases) < k || ncol(subset_train_data) < 2) {
+              next
             } else {
-              NA
+              subset_train_data_temp <- as.data.frame(lapply(subset_train_data, function(x) if (is.factor(x)) as.numeric(as.character(x)) else x))
+              imputed_knn <- tryCatch({
+                knnImputation(subset_train_data_temp, k = k)
+              }, error = function(e) subset_train_data_temp)
             }
-          })
-          acc_knn <- mean(acc_values, na.rm = TRUE)
-        } else {
-          acc_knn <- NA
-        }
-
-        if (mse_knn == 0 || acc_knn == 1) {
-          cat("WARNING: KNN has suspicious perfect results (MSE=0, Acc=1). This may indicate evaluation issues.\n")
-          mse_knn <- NA
-          acc_knn <- NA
-        }
-
-        knn_results[knn_results$K == k, "MSE"] <- mse_knn
-        knn_results[knn_results$K == k, "Accuracy"] <- acc_knn
-      }
-
-      if (!all(is.na(knn_results$MSE))) {
-        best_knn <- knn_results[which.min(knn_results$MSE), ]
-        results <- rbind(results, data.frame(
-          Method = "KNN",
-          Iteration = i,
-          MSE = best_knn$MSE,
-          Categorical_Accuracy = best_knn$Accuracy,
-          K_Value = best_knn$K,
-          Missing_Rate = missing_rate
-        ))
-      }
-
-      ## MICE
-      cat("\nRunning MICE...\n")
-      mice_methods <- make.method(subset_train_data)
-      mice_methods[sapply(subset_train_data, is.numeric)] <- "pmm"
-      mice_methods[sapply(subset_train_data, function(x) is.factor(x) & nlevels(x) == 2)] <- "logreg"
-      mice_methods[sapply(subset_train_data, is.ordered)] <- "polr"
-      mice_methods[sapply(subset_train_data, function(x) is.factor(x) & nlevels(x) > 2)] <- "polyreg"
-
-      mice_model <- tryCatch({
-        mice(subset_train_data, method = mice_methods, m = mice_m, maxit = mice_maxit, seed = seed)
-      }, error = function(e) {
-        cat("MICE error:", e$message, "\n")
-        return(NULL)
-      })
-
-      if (!is.null(mice_model)) {
-        imputed_mice <- tryCatch({
-          complete(mice_model, 1)
-        }, error = function(e) {
-          cat("Error completing MICE data:", e$message, "\n")
-          return(NULL)
-        })
-
-        if (!is.null(imputed_mice)) {
-          available_num_vars <- intersect(num_vars, colnames(imputed_mice))
-          available_cat_vars <- intersect(cat_vars, colnames(imputed_mice))
-
-          mse_mice <- NA
-          if (length(available_num_vars) > 0) {
-            mse_mice <- mean((as.matrix(imputed_mice[, available_num_vars]) - as.matrix(complete_data[, available_num_vars]))^2, na.rm = TRUE)
           }
 
-          acc_mice <- NA
+          available_num_vars <- intersect(num_vars, colnames(imputed_knn))
+          if (length(available_num_vars) > 0) {
+            mse_knn <- mean((as.matrix(imputed_knn[, available_num_vars]) - as.matrix(complete_data[, available_num_vars]))^2, na.rm = TRUE)
+          } else {
+            mse_knn <- NA
+          }
+
+          available_cat_vars <- intersect(cat_vars, colnames(imputed_knn))
           if (length(available_cat_vars) > 0) {
             acc_values <- sapply(available_cat_vars, function(var) {
-              if (var %in% colnames(imputed_mice) && var %in% colnames(complete_data)) {
-                mean(imputed_mice[[var]] == complete_data[[var]], na.rm = TRUE)
+              if (var %in% colnames(imputed_knn) && var %in% colnames(complete_data)) {
+                mean(imputed_knn[[var]] == complete_data[[var]], na.rm = TRUE)
               } else {
                 NA
               }
             })
-            acc_mice <- mean(acc_values, na.rm = TRUE)
+            acc_knn <- mean(acc_values, na.rm = TRUE)
+          } else {
+            acc_knn <- NA
           }
 
-          results <- rbind(results, data.frame(Method = "MICE", Iteration = i, MSE = mse_mice, Categorical_Accuracy = acc_mice, K_Value = NA, Missing_Rate = missing_rate))
+          if (mse_knn == 0 || acc_knn == 1) {
+            cat("WARNING: KNN has suspicious perfect results (MSE=0, Acc=1). This may indicate evaluation issues.\n")
+            mse_knn <- NA
+            acc_knn <- NA
+          }
+
+          knn_results[knn_results$K == k, "MSE"] <- mse_knn
+          knn_results[knn_results$K == k, "Accuracy"] <- acc_knn
+        }
+
+        if (!all(is.na(knn_results$MSE))) {
+          best_knn <- knn_results[which.min(knn_results$MSE), ]
+          results <- rbind(results, data.frame(
+            Method = "KNN",
+            Iteration = i,
+            MSE = best_knn$MSE,
+            Categorical_Accuracy = best_knn$Accuracy,
+            K_Value = best_knn$K,
+            Missing_Rate = missing_rate
+          ))
+        }
+      }
+
+
+      ## MICE
+      if("mice" %in% methods) {
+        cat("\nRunning MICE...\n")
+        mice_methods <- make.method(subset_train_data)
+        mice_methods[sapply(subset_train_data, is.numeric)] <- "pmm"
+        mice_methods[sapply(subset_train_data, function(x) is.factor(x) & nlevels(x) == 2)] <- "logreg"
+        mice_methods[sapply(subset_train_data, is.ordered)] <- "polr"
+        mice_methods[sapply(subset_train_data, function(x) is.factor(x) & nlevels(x) > 2)] <- "polyreg"
+
+        mice_model <- tryCatch({
+          mice(subset_train_data, method = mice_methods, m = mice_m, maxit = mice_maxit, seed = seed)
+        }, error = function(e) {
+          cat("MICE error:", e$message, "\n")
+          return(NULL)
+        })
+
+        if (!is.null(mice_model)) {
+          imputed_mice <- tryCatch({
+            complete(mice_model, 1)
+          }, error = function(e) {
+            cat("Error completing MICE data:", e$message, "\n")
+            return(NULL)
+          })
+
+          if (!is.null(imputed_mice)) {
+            available_num_vars <- intersect(num_vars, colnames(imputed_mice))
+            available_cat_vars <- intersect(cat_vars, colnames(imputed_mice))
+
+            mse_mice <- NA
+            if (length(available_num_vars) > 0) {
+              mse_mice <- mean((as.matrix(imputed_mice[, available_num_vars]) - as.matrix(complete_data[, available_num_vars]))^2, na.rm = TRUE)
+            }
+
+            acc_mice <- NA
+            if (length(available_cat_vars) > 0) {
+              acc_values <- sapply(available_cat_vars, function(var) {
+                if (var %in% colnames(imputed_mice) && var %in% colnames(complete_data)) {
+                  mean(imputed_mice[[var]] == complete_data[[var]], na.rm = TRUE)
+                } else {
+                  NA
+                }
+              })
+              acc_mice <- mean(acc_values, na.rm = TRUE)
+            }
+
+            results <- rbind(results, data.frame(Method = "MICE", Iteration = i, MSE = mse_mice, Categorical_Accuracy = acc_mice, K_Value = NA, Missing_Rate = missing_rate))
+          }
         }
       }
 
       ## miceRanger
-      cat("\nRunning miceRanger...\n")
-      tryCatch({
-        if (sum(!is.na(subset_train_data)) < nrow(subset_train_data) * 0.5 || ncol(subset_train_data) < 2) {
-          cat("Insufficient data for miceRanger imputation\n")
-        } else {
-          data_for_imputation <- subset_train_data
+      if("mice_rf" %in% methods) {
+        cat("\nRunning miceRanger...\n")
+        tryCatch({
+          if (sum(!is.na(subset_train_data)) < nrow(subset_train_data) * 0.5 || ncol(subset_train_data) < 2) {
+            cat("Insufficient data for miceRanger imputation\n")
+          } else {
+            data_for_imputation <- subset_train_data
 
-          cat("Analyzing variable types for miceRanger...\n")
+            cat("Analyzing variable types for miceRanger...\n")
 
-          var_types <- sapply(data_for_imputation, class)
-          cat_vars_in_data <- names(which(sapply(data_for_imputation, is.factor)))
-          ordered_cat_vars <- names(which(sapply(data_for_imputation, is.ordered)))
-          unordered_cat_vars <- setdiff(cat_vars_in_data, ordered_cat_vars)
-          numeric_vars <- names(which(sapply(data_for_imputation, is.numeric)))
+            var_types <- sapply(data_for_imputation, class)
+            cat_vars_in_data <- names(which(sapply(data_for_imputation, is.factor)))
+            ordered_cat_vars <- names(which(sapply(data_for_imputation, is.ordered)))
+            unordered_cat_vars <- setdiff(cat_vars_in_data, ordered_cat_vars)
+            numeric_vars <- names(which(sapply(data_for_imputation, is.numeric)))
 
-          cat("Found", length(cat_vars_in_data), "categorical variables:",
-              length(ordered_cat_vars), "ordered and",
-              length(unordered_cat_vars), "unordered\n")
-          cat("Found", length(numeric_vars), "numeric variables\n")
+            cat("Found", length(cat_vars_in_data), "categorical variables:",
+                length(ordered_cat_vars), "ordered and",
+                length(unordered_cat_vars), "unordered\n")
+            cat("Found", length(numeric_vars), "numeric variables\n")
 
-          data_for_imputation_prep <- data_for_imputation
+            data_for_imputation_prep <- data_for_imputation
 
-          orig_data_info <- list(
-            ordered_vars = ordered_cat_vars,
-            unordered_vars = unordered_cat_vars,
-            numeric_vars = numeric_vars
-          )
+            orig_data_info <- list(
+              ordered_vars = ordered_cat_vars,
+              unordered_vars = unordered_cat_vars,
+              numeric_vars = numeric_vars
+            )
 
-          orig_levels <- list()
-          for (var in cat_vars_in_data) {
-            orig_levels[[var]] <- levels(data_for_imputation[[var]])
-          }
-          orig_data_info$levels <- orig_levels
-
-          # Handle ordered variables - convert to numeric values to maintain order
-          if (length(ordered_cat_vars) > 0) {
-            for (var in ordered_cat_vars) {
-              data_for_imputation_prep[[var]] <- as.numeric(data_for_imputation[[var]])
+            orig_levels <- list()
+            for (var in cat_vars_in_data) {
+              orig_levels[[var]] <- levels(data_for_imputation[[var]])
             }
-            cat("Converted", length(ordered_cat_vars), "ordered categorical variables to numeric\n")
-          }
+            orig_data_info$levels <- orig_levels
 
-          # Handling unordered variables - Try to create dummy variables
-          if (length(unordered_cat_vars) > 0) {
-            tryCatch({
-              cat("Attempting to create dummy variables for unordered categories...\n")
-
-              for (var in unordered_cat_vars) {
-                levels_var <- levels(data_for_imputation[[var]])
-
-                data_for_imputation_prep[[var]] <- NULL
-
-                # Create dummy variables for each level
-                for (level in levels_var) {
-                  dummy_name <- paste0(var, "_", make.names(level))
-                  data_for_imputation_prep[[dummy_name]] <- as.numeric(data_for_imputation[[var]] == level)
-                }
-
-                if (!exists("dummy_var_mapping", where = orig_data_info)) {
-                  orig_data_info$dummy_var_mapping <- list()
-                }
-
-                dummy_vars <- c()
-                for (level in levels_var) {
-                  dummy_vars <- c(dummy_vars, paste0(var, "_", make.names(level)))
-                }
-                orig_data_info$dummy_var_mapping[[var]] <- dummy_vars
-              }
-
-              cat("Successfully created dummy variables for", length(unordered_cat_vars),
-                  "unordered categorical variables\n")
-
-            }, error = function(e) {
-              cat("Error creating dummy variables:", e$message, "\n")
-              cat("Falling back to direct numeric conversion for unordered variables\n")
-
-              for (var in unordered_cat_vars) {
+            # Handle ordered variables - convert to numeric values to maintain order
+            if (length(ordered_cat_vars) > 0) {
+              for (var in ordered_cat_vars) {
                 data_for_imputation_prep[[var]] <- as.numeric(data_for_imputation[[var]])
               }
-
-              orig_data_info$used_fallback <- TRUE
-            })
-          }
-
-          cat("Original data dimensions:", dim(data_for_imputation), "\n")
-          cat("Preprocessed data dimensions:", dim(data_for_imputation_prep), "\n")
-
-          cat("Running miceRanger with preprocessed data...\n")
-          micer_model <- tryCatch(
-            miceRanger(
-              data = data_for_imputation_prep,
-              m = mice_m,
-              maxiter = mice_maxit,
-              num.trees = micer_num_trees,
-              verbose = TRUE,
-              returnModels = TRUE,
-              seed = seed + i
-            ),
-            error = function(e) {
-              cat("miceRanger execution error:", e$message, "\n")
-              return(NULL)
+              cat("Converted", length(ordered_cat_vars), "ordered categorical variables to numeric\n")
             }
-          )
 
-          if (!is.null(micer_model)) {
-            imputed_i_num <- tryCatch(completeData(micer_model)[[1]], error = function(e) {
-              cat("completeData error:", e$message, "\n")
-              return(NULL)
-            })
+            # Handling unordered variables - Try to create dummy variables
+            if (length(unordered_cat_vars) > 0) {
+              tryCatch({
+                cat("Attempting to create dummy variables for unordered categories...\n")
 
-            if (!is.null(imputed_i_num)) {
-              imputed_i <- data.frame(matrix(ncol = 0, nrow = nrow(imputed_i_num)))
+                for (var in unordered_cat_vars) {
+                  levels_var <- levels(data_for_imputation[[var]])
 
-              for (var in numeric_vars) {
-                if (var %in% colnames(imputed_i_num)) {
-                  imputed_i[[var]] <- imputed_i_num[[var]]
-                }
-              }
+                  data_for_imputation_prep[[var]] <- NULL
 
-              # Rebuild ordered categorical variables
-              for (var in ordered_cat_vars) {
-                if (var %in% colnames(imputed_i_num)) {
-                  orig_levels_var <- orig_data_info$levels[[var]]
-                  max_level <- length(orig_levels_var)
-
-                  imputed_values <- imputed_i_num[[var]]
-
-                  # Round and limit the range
-                  imputed_values <- round(imputed_values)
-                  imputed_values[imputed_values < 1] <- 1
-                  imputed_values[imputed_values > max_level] <- max_level
-
-                  # convert to ordered factor
-                  imputed_i[[var]] <- factor(
-                    orig_levels_var[imputed_values],
-                    levels = orig_levels_var,
-                    ordered = TRUE
-                  )
-                }
-              }
-
-              # Rebuild unordered categorical variables
-              if (length(unordered_cat_vars) > 0) {
-                if (exists("used_fallback", where = orig_data_info) && orig_data_info$used_fallback) {
-                  for (var in unordered_cat_vars) {
-                    if (var %in% colnames(imputed_i_num)) {
-                      orig_levels_var <- orig_data_info$levels[[var]]
-                      max_level <- length(orig_levels_var)
-                      imputed_values <- imputed_i_num[[var]]
-
-                      # Round and limit the range
-                      imputed_values <- round(imputed_values)
-                      imputed_values[imputed_values < 1] <- 1
-                      imputed_values[imputed_values > max_level] <- max_level
-
-                      # convert to factor
-                      imputed_i[[var]] <- factor(
-                        orig_levels_var[imputed_values],
-                        levels = orig_levels_var
-                      )
-                    }
+                  # Create dummy variables for each level
+                  for (level in levels_var) {
+                    dummy_name <- paste0(var, "_", make.names(level))
+                    data_for_imputation_prep[[dummy_name]] <- as.numeric(data_for_imputation[[var]] == level)
                   }
-                } else if (exists("dummy_var_mapping", where = orig_data_info)) {
-                  for (var in unordered_cat_vars) {
-                    var_dummy_cols <- orig_data_info$dummy_var_mapping[[var]]
 
-                    if (all(var_dummy_cols %in% colnames(imputed_i_num))) {
+                  if (!exists("dummy_var_mapping", where = orig_data_info)) {
+                    orig_data_info$dummy_var_mapping <- list()
+                  }
 
-                      dummy_matrix <- matrix(nrow = nrow(imputed_i_num), ncol = length(var_dummy_cols))
+                  dummy_vars <- c()
+                  for (level in levels_var) {
+                    dummy_vars <- c(dummy_vars, paste0(var, "_", make.names(level)))
+                  }
+                  orig_data_info$dummy_var_mapping[[var]] <- dummy_vars
+                }
 
-                      for (i in 1:length(var_dummy_cols)) {
-                        dummy_matrix[, i] <- imputed_i_num[[var_dummy_cols[i]]]
+                cat("Successfully created dummy variables for", length(unordered_cat_vars),
+                    "unordered categorical variables\n")
+
+              }, error = function(e) {
+                cat("Error creating dummy variables:", e$message, "\n")
+                cat("Falling back to direct numeric conversion for unordered variables\n")
+
+                for (var in unordered_cat_vars) {
+                  data_for_imputation_prep[[var]] <- as.numeric(data_for_imputation[[var]])
+                }
+
+                orig_data_info$used_fallback <- TRUE
+              })
+            }
+
+            cat("Original data dimensions:", dim(data_for_imputation), "\n")
+            cat("Preprocessed data dimensions:", dim(data_for_imputation_prep), "\n")
+
+            cat("Running miceRanger with preprocessed data...\n")
+            micer_model <- tryCatch(
+              miceRanger(
+                data = data_for_imputation_prep,
+                m = mice_m,
+                maxiter = mice_maxit,
+                num.trees = micer_num_trees,
+                verbose = TRUE,
+                returnModels = TRUE,
+                seed = seed + i
+              ),
+              error = function(e) {
+                cat("miceRanger execution error:", e$message, "\n")
+                return(NULL)
+              }
+            )
+
+            if (!is.null(micer_model)) {
+              imputed_i_num <- tryCatch(completeData(micer_model)[[1]], error = function(e) {
+                cat("completeData error:", e$message, "\n")
+                return(NULL)
+              })
+
+              if (!is.null(imputed_i_num)) {
+                imputed_i <- data.frame(matrix(ncol = 0, nrow = nrow(imputed_i_num)))
+
+                for (var in numeric_vars) {
+                  if (var %in% colnames(imputed_i_num)) {
+                    imputed_i[[var]] <- imputed_i_num[[var]]
+                  }
+                }
+
+                # Rebuild ordered categorical variables
+                for (var in ordered_cat_vars) {
+                  if (var %in% colnames(imputed_i_num)) {
+                    orig_levels_var <- orig_data_info$levels[[var]]
+                    max_level <- length(orig_levels_var)
+
+                    imputed_values <- imputed_i_num[[var]]
+
+                    # Round and limit the range
+                    imputed_values <- round(imputed_values)
+                    imputed_values[imputed_values < 1] <- 1
+                    imputed_values[imputed_values > max_level] <- max_level
+
+                    # convert to ordered factor
+                    imputed_i[[var]] <- factor(
+                      orig_levels_var[imputed_values],
+                      levels = orig_levels_var,
+                      ordered = TRUE
+                    )
+                  }
+                }
+
+                # Rebuild unordered categorical variables
+                if (length(unordered_cat_vars) > 0) {
+                  if (exists("used_fallback", where = orig_data_info) && orig_data_info$used_fallback) {
+                    for (var in unordered_cat_vars) {
+                      if (var %in% colnames(imputed_i_num)) {
+                        orig_levels_var <- orig_data_info$levels[[var]]
+                        max_level <- length(orig_levels_var)
+                        imputed_values <- imputed_i_num[[var]]
+
+                        # Round and limit the range
+                        imputed_values <- round(imputed_values)
+                        imputed_values[imputed_values < 1] <- 1
+                        imputed_values[imputed_values > max_level] <- max_level
+
+                        # convert to factor
+                        imputed_i[[var]] <- factor(
+                          orig_levels_var[imputed_values],
+                          levels = orig_levels_var
+                        )
                       }
+                    }
+                  } else if (exists("dummy_var_mapping", where = orig_data_info)) {
+                    for (var in unordered_cat_vars) {
+                      var_dummy_cols <- orig_data_info$dummy_var_mapping[[var]]
 
-                      max_index <- apply(dummy_matrix, 1, which.max)
+                      if (all(var_dummy_cols %in% colnames(imputed_i_num))) {
 
-                      orig_levels_var <- orig_data_info$levels[[var]]
+                        dummy_matrix <- matrix(nrow = nrow(imputed_i_num), ncol = length(var_dummy_cols))
 
-                      imputed_i[[var]] <- factor(
-                        orig_levels_var[max_index],
-                        levels = orig_levels_var
-                      )
-                    } else {
-                      cat("Warning: Not all dummy variables found for", var, "\n")
-                      imputed_i[[var]] <- data_for_imputation[[var]]
+                        for (i in 1:length(var_dummy_cols)) {
+                          dummy_matrix[, i] <- imputed_i_num[[var_dummy_cols[i]]]
+                        }
+
+                        max_index <- apply(dummy_matrix, 1, which.max)
+
+                        orig_levels_var <- orig_data_info$levels[[var]]
+
+                        imputed_i[[var]] <- factor(
+                          orig_levels_var[max_index],
+                          levels = orig_levels_var
+                        )
+                      } else {
+                        cat("Warning: Not all dummy variables found for", var, "\n")
+                        imputed_i[[var]] <- data_for_imputation[[var]]
+                      }
                     }
                   }
                 }
-              }
 
-              missing_cols <- setdiff(colnames(data_for_imputation), colnames(imputed_i))
-              if (length(missing_cols) > 0) {
-                for (col in missing_cols) {
-                  imputed_i[[col]] <- data_for_imputation[[col]]
+                missing_cols <- setdiff(colnames(data_for_imputation), colnames(imputed_i))
+                if (length(missing_cols) > 0) {
+                  for (col in missing_cols) {
+                    imputed_i[[col]] <- data_for_imputation[[col]]
+                  }
                 }
-              }
 
-              available_num_vars <- intersect(num_vars, colnames(imputed_i))
-              available_cat_vars <- intersect(cat_vars, colnames(imputed_i))
+                available_num_vars <- intersect(num_vars, colnames(imputed_i))
+                available_cat_vars <- intersect(cat_vars, colnames(imputed_i))
 
-              mse_micer <- NA
-              if (length(available_num_vars) > 0) {
-                mse_values <- c()
-                for (var in available_num_vars) {
-                  var_mse <- tryCatch({
-                    mean((imputed_i[[var]] - complete_data[[var]])^2, na.rm = TRUE)
-                  }, error = function(e) NA)
-                  mse_values <- c(mse_values, var_mse)
+                mse_micer <- NA
+                if (length(available_num_vars) > 0) {
+                  mse_values <- c()
+                  for (var in available_num_vars) {
+                    var_mse <- tryCatch({
+                      mean((imputed_i[[var]] - complete_data[[var]])^2, na.rm = TRUE)
+                    }, error = function(e) NA)
+                    mse_values <- c(mse_values, var_mse)
+                  }
+                  mse_micer <- mean(mse_values, na.rm = TRUE)
                 }
-                mse_micer <- mean(mse_values, na.rm = TRUE)
-              }
 
-              acc_micer <- NA
-              if (length(available_cat_vars) > 0) {
-                acc_values <- c()
-                for (var in available_cat_vars) {
-                  var_acc <- tryCatch({
-                    mean(imputed_i[[var]] == complete_data[[var]], na.rm = TRUE)
-                  }, error = function(e) NA)
-                  acc_values <- c(acc_values, var_acc)
+                acc_micer <- NA
+                if (length(available_cat_vars) > 0) {
+                  acc_values <- c()
+                  for (var in available_cat_vars) {
+                    var_acc <- tryCatch({
+                      mean(imputed_i[[var]] == complete_data[[var]], na.rm = TRUE)
+                    }, error = function(e) NA)
+                    acc_values <- c(acc_values, var_acc)
+                  }
+                  acc_micer <- mean(acc_values, na.rm = TRUE)
                 }
-                acc_micer <- mean(acc_values, na.rm = TRUE)
-              }
 
-              cat("Adding miceRanger results: MSE =", mse_micer, ", Accuracy =", acc_micer, "\n")
-              results <- rbind(results, data.frame(
-                Method = "miceRanger",
-                Iteration = i,
-                MSE = mse_micer,
-                Categorical_Accuracy = acc_micer,
-                K_Value = NA,
-                Missing_Rate = missing_rate
-              ))
+                cat("Adding miceRanger results: MSE =", mse_micer, ", Accuracy =", acc_micer, "\n")
+                results <- rbind(results, data.frame(
+                  Method = "miceRanger",
+                  Iteration = i,
+                  MSE = mse_micer,
+                  Categorical_Accuracy = acc_micer,
+                  K_Value = NA,
+                  Missing_Rate = missing_rate
+                ))
+              } else {
+                cat("Failed to get completed data from miceRanger\n")
+              }
             } else {
-              cat("Failed to get completed data from miceRanger\n")
+              cat("Failed to create miceRanger model\n")
             }
-          } else {
-            cat("Failed to create miceRanger model\n")
           }
-        }
-      }, error = function(e) {
-        cat("General error in miceRanger section:", e$message, "\n")
-      })
+        }, error = function(e) {
+          cat("General error in miceRanger section:", e$message, "\n")
+        })
+      }
     }
 
     agg_results <- results %>%
@@ -621,6 +657,27 @@ MI_func <- function(data_selected,
 
   data_selected_subset <- data_selected[, selected_features]
   data_selected_subset <- as.data.frame(data_selected_subset)
+
+  # If the best model isn't one of the selected methods, choose the best among selected methods
+  if (!(best_model$Method %in% selected_method_names)) {
+    best_model <- agg_results_all %>%
+      filter(Missing_Rate == selected_missing_rate, Method %in% selected_method_names) %>%
+      arrange(Average_MSE, desc(Average_Accuracy)) %>%
+      slice(1)
+
+    if (nrow(best_model) == 0) {
+      stop("No valid models found in the selected methods. Please check your method selection.")
+    }
+
+    cat("\nNote: Best overall model not in selected methods. Using best model from selected methods instead.\n")
+  }
+
+  cat(sprintf("\nBest model selected: %s", best_model$Method))
+  if (best_model$Method == "KNN" && !is.na(best_model$Best_K_Value)) {
+    cat(sprintf(" (K = %d)", best_model$Best_K_Value))
+  }
+  cat("\n")
+
 
   if (best_model$Method == "RandomForest") {
     final_imputed_data <- missForest(data_selected_subset, ntree = ntree, maxiter = maxiter)$ximp
@@ -1001,6 +1058,7 @@ MI_func <- function(data_selected,
     final_boxplot = final_boxplot,
     final_density_plot = final_density_plot,
     final_barplot = final_barplot,
-    output_file_name = file_name
+    output_file_name = file_name,
+    methods_used = methods
   ))
 }

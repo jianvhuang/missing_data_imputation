@@ -2,11 +2,11 @@
 
 ## Overview
 
-ImputationR is a comprehensive R package used to evaluate and implement various methods for imputing in missing data. This package compares four popular imputation methods (Random Forest, K-nearest neighbor, MICE, and MICE based on random forest), and provides detailed visualizations and reports to help users select the most appropriate method for a specific dataset.
+ImputationR is a comprehensive R package used to evaluate and implement various methods for imputing in missing data. This package compares four popular imputation methods (Random Forest, K-nearest neighbor, MICE, and MICE with random forest), and provides detailed visualizations and reports to help users select the most appropriate method for a specific dataset.
 
 ## Function
 
-- **Multi-method comparison** : Compare the performance of four imputation methods under different missing rates
+- **Multi-method comparison** : Compare the performance of four imputation methods under different missing rates, Random Forest is implemented using `missforest`, KNN is implemented using `DMwR2`, Multivariate Imputation by Chained Equation (MICE) is implemented using `mice`, Multiple Imputation by Chained Equations with Random Forest is implemented using `miceRanger`.
 - **Automatic selection** : Automatically select the best method based on MSE and classification accuracy
 - **Final imputation** : Apply the selected best model to impute missing values in the real dataset
 - **Visualization** : Generate detailed visual comparisons before and after imputation
@@ -29,16 +29,13 @@ devtools::install_github("jianvhuang/missing_data_imputation")
 This is a basic example which shows you how to solve a common problem:
 
 ``` r
+devtools::load_all()
 rm(list = ls())
 library(ImputationR)
 ```
-This example uses the `blood_storage` dataset from the `medicaldata` package:
+This example uses the blood_storage dataset from the medicaldata package. We introduce additional missing value for demonstration purpose.
 ``` r
-remotes::install_github("higgi13425/medicaldata")
-library(medicaldata)
-data("blood_storage", package = "medicaldata")
-data <- blood_storage
-
+data <- read.csv("data/blood_storage_add_missing.csv", check.names = FALSE)
 
 # Create output directory
 temp_dir <- tempdir()
@@ -113,10 +110,10 @@ result <- run_imputation_analysis(
   mice_m = 3,
   mice_maxit = 5,
   micer_num_trees = 50,
-  user_defined_features = NULL
+  user_defined_features = NULL,
+  methods = c("rf", "mice")
 ) 
 list.files(dir_output)
-
 ```
 
 ## Interpreting Results
