@@ -397,17 +397,21 @@ devtools::install_github(&quot;jianvhuang/missing_data_imputation&quot;)</code><
 <p>This is a basic example which shows you how to solve a common
 problem:</p>
 <pre class="r"><code>rm(list = ls())
-library(ImputationR)</code></pre>
+library(ImputationR)
+
+# Load all dependencies with one command
+ImputationR::load_imputation_dependencies()</code></pre>
 <p>This example uses the blood_storage dataset from the medicaldata
 package. We introduce additional missing value for demonstration
 purpose.</p>
-<pre class="r"><code>data &lt;- read.csv(&quot;data/blood_storage_add_missing.csv&quot;, check.names = FALSE)
-
-# Create output directory
+<pre class="r"><code># Create output directory
 temp_dir &lt;- tempdir()
 dir_output &lt;- file.path(temp_dir, &quot;imputation-blood&quot;)
 dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
 cat(&quot;Output will be saved to:&quot;, dir_output, &quot;\n&quot;)
+
+# Users can download the csv file from the GitHub repository and store it in their own data directory.
+data &lt;- read.csv(&quot;data/blood_storage_add_missing.csv&quot;, check.names = FALSE)
 
 # Define variable types
 # Store information column (demographic/identifier variables)
@@ -438,8 +442,7 @@ data_selected[categorical_vars] &lt;- lapply(data_selected[categorical_vars], as
 data_selected[continuous_vars] &lt;- lapply(data_selected[continuous_vars], as.numeric)
 
 # Check data types
-str(data_selected)
-</code></pre>
+str(data_selected)</code></pre>
 </div>
 <div id="basic-example-code" class="section level2">
 <h2>basic example code</h2>
@@ -448,7 +451,7 @@ str(data_selected)
 <p>You can use the individual functions for specific tasks:</p>
 <pre class="r"><code># Analysis of missing values
 missing_rate &lt;- check_missing_values(data_selected, dir_output)
-cat(&quot;Overall missing rate:&quot;, missing_rate * 100, &quot;%\n&quot;)
+cat(&quot;Overall missing rate:&quot;, missing_rate[[1]] * 100, &quot;%\n&quot;)
 
 # Correlation analysis
 cor_vars &lt;- check_correlation(data_selected, continuous_vars, dir_output)
@@ -475,10 +478,10 @@ result &lt;- run_imputation_analysis(
   mice_m = 3,
   mice_maxit = 5,
   micer_num_trees = 50,
-  user_defined_features = NULL
+  user_defined_features = NULL,
+  methods = c(&quot;rf&quot;, &quot;mice&quot;)
 ) 
-list.files(dir_output)
-</code></pre>
+list.files(dir_output)</code></pre>
 </div>
 </div>
 <div id="interpreting-results" class="section level2">
@@ -499,6 +502,42 @@ data</li>
 <p>Additionally, the function generates a PDF report in the specified
 output directory, containing visualizations and detailed analysis of the
 imputation process.</p>
+<p><strong>Note:</strong> PDF report generation requires a working LaTeX
+installation (e.g., via the <code>tinytex</code> package).</p>
+<pre class="r"><code># open genterated report
+report_path &lt;- file.path(dir_output, &quot;blood_imputation_report.pdf&quot;)
+if (file.exists(report_path)) {
+  cat(&quot;\nTest completed successfully.\n&quot;)
+  cat(&quot;You can view the report at:&quot;, report_path, &quot;\n&quot;)
+
+# If success, automatically open PDF files
+  if (interactive()) {
+    os &lt;- Sys.info()[&quot;sysname&quot;]
+    if (os == &quot;Windows&quot;) {
+      shell.exec(report_path)
+    } else if (os == &quot;Darwin&quot;) {  # macOS
+      system2(&quot;open&quot;, report_path)
+    } else if (os == &quot;Linux&quot;) {
+      system2(&quot;xdg-open&quot;, report_path)
+    }
+  }
+}
+
+error = function(e) {
+cat(&quot;\n--- ERROR ENCOUNTERED ---\n&quot;)
+cat(&quot;Error message:&quot;, e$message, &quot;\n\n&quot;)
+cat(&quot;Call stack:\n&quot;)
+print(sys.calls())
+cat(&quot;\n--- Debug Information ---\n&quot;)
+cat(&quot;Working directory:&quot;, getwd(), &quot;\n&quot;)
+cat(&quot;Output directory exists:&quot;, dir.exists(dir_output), &quot;\n&quot;)
+}</code></pre>
+</div>
+<div id="documentation" class="section level2">
+<h2>Documentation</h2>
+<p>For a comprehensive guide on using ImputationR, please refer to the
+package vignette:</p>
+<pre class="r"><code>vignette(&quot;imputation-guide&quot;, package = &quot;ImputationR&quot;)</code></pre>
 </div>
 </div>
 

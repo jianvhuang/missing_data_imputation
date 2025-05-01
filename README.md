@@ -30,20 +30,21 @@ This is a basic example which shows you how to solve a common problem:
 
 ``` r
 rm(list = ls())
-devtools::load_all()
 library(ImputationR)
+
 # Load all dependencies with one command
 ImputationR::load_imputation_dependencies()
 ```
 This example uses the blood_storage dataset from the medicaldata package. We introduce additional missing value for demonstration purpose.
 ``` r
-data <- read.csv("data/blood_storage_add_missing.csv", check.names = FALSE)
-
 # Create output directory
 temp_dir <- tempdir()
 dir_output <- file.path(temp_dir, "imputation-blood")
 dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
 cat("Output will be saved to:", dir_output, "\n")
+
+# Users can download the csv file from the GitHub repository and store it in their own data directory.
+data <- read.csv("data/blood_storage_add_missing.csv", check.names = FALSE)
 
 # Define variable types
 # Store information column (demographic/identifier variables)
@@ -84,7 +85,7 @@ You can use the individual functions for specific tasks:
 ```r
 # Analysis of missing values
 missing_rate <- check_missing_values(data_selected, dir_output)
-cat("Overall missing rate:", missing_rate * 100, "%\n")
+cat("Overall missing rate:", missing_rate[[1]] * 100, "%\n")
 
 # Correlation analysis
 cor_vars <- check_correlation(data_selected, continuous_vars, dir_output)
@@ -128,6 +129,39 @@ The primary output of `run_imputation_analysis()` is a list containing:
 - `output_file_name`: Name of the output file with imputed data
 
 Additionally, the function generates a PDF report in the specified output directory, containing visualizations and detailed analysis of the imputation process.
+
+**Note:** PDF report generation requires a working LaTeX installation (e.g., via the `tinytex` package).
+
+```r
+# open genterated report
+report_path <- file.path(dir_output, "blood_imputation_report.pdf")
+if (file.exists(report_path)) {
+  cat("\nTest completed successfully.\n")
+  cat("You can view the report at:", report_path, "\n")
+
+# If success, automatically open PDF files
+  if (interactive()) {
+    os <- Sys.info()["sysname"]
+    if (os == "Windows") {
+      shell.exec(report_path)
+    } else if (os == "Darwin") {  # macOS
+      system2("open", report_path)
+    } else if (os == "Linux") {
+      system2("xdg-open", report_path)
+    }
+  }
+}
+
+error = function(e) {
+cat("\n--- ERROR ENCOUNTERED ---\n")
+cat("Error message:", e$message, "\n\n")
+cat("Call stack:\n")
+print(sys.calls())
+cat("\n--- Debug Information ---\n")
+cat("Working directory:", getwd(), "\n")
+cat("Output directory exists:", dir.exists(dir_output), "\n")
+}
+```
 
 ## Documentation
 

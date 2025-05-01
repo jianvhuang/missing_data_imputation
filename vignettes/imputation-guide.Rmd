@@ -54,13 +54,12 @@ if (!requireNamespace("devtools", quietly = TRUE)) {
 }
 
 # Install ImputationR from GitHub
-# devtools::install_github("jianvhuang/missing_data_imputation")
+devtools::install_github("jianvhuang/missing_data_imputation")
 ```
 
 The package requires several dependencies, which will be automatically installed:
 
 ```{r load_libraries, warning=FALSE}
-devtools::load_all()
 library(ImputationR)
 # Load all dependencies with one command
 ImputationR::load_imputation_dependencies()
@@ -75,6 +74,7 @@ cat("Output will be saved to:", dir_output, "\n")
 The following sections describe the components of the `ImputationR` workflow in detail.
 
 ```{r load_data}
+# Users can download the csv file from the GitHub repository and store it in their own data directory.
 # This example uses the blood_storage dataset from the medicaldata package. We introduce additional missing value for demonstration purpose.
 data <- read.csv("../data/blood_storage_add_missing.csv", check.names = FALSE)
 ```
@@ -327,6 +327,8 @@ The report includes:
 4. **Method Comparison**: Performance metrics for each method
 5. **Imputation Results**: Comparison of data before and after imputation
 6. **Implementation Details**: Parameters used
+
+**Note:** PDF report generation requires a working LaTeX installation (e.g., via the `tinytex` package).
 
 ### Interpreting Visualizations
 
