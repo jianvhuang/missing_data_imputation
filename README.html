@@ -479,9 +479,54 @@ result &lt;- run_imputation_analysis(
   mice_maxit = 5,
   micer_num_trees = 50,
   user_defined_features = NULL,
-  methods = c(&quot;rf&quot;, &quot;mice&quot;)
+  methods = c(&quot;mice&quot;)
 ) 
-list.files(dir_output)</code></pre>
+
+list.files(dir_output)
+
+# List the generated imputed dataset
+list.files(file.path(dir_output, &quot;imputed dataset&quot;))</code></pre>
+<p>The final imputed datasets are saved in the
+<code>imputed dataset/</code> folder within the specified output
+directory. The number and naming of output files depend on the selected
+imputation method:</p>
+<table>
+<colgroup>
+<col width="27%" />
+<col width="72%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Method</th>
+<th>Output Files</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Random Forest (<code>&quot;rf&quot;</code>)</td>
+<td><code>final_imputed_data_rf.csv</code><br>→ One single imputed
+dataset</td>
+</tr>
+<tr class="even">
+<td>KNN (<code>&quot;knn&quot;</code>)</td>
+<td><code>final_imputed_data_knn_n=5.csv</code><br>→ One file;
+<code>n</code> reflects selected <code>K</code></td>
+</tr>
+<tr class="odd">
+<td>MICE (<code>&quot;mice&quot;</code>)</td>
+<td><code>final_imputed_data_mice_1.csv</code> to
+<code>final_imputed_data_mice_m.csv</code><br>→ Multiple imputed
+datasets (controlled by <code>mice_m</code>)</td>
+</tr>
+<tr class="even">
+<td>miceRanger (<code>&quot;mice_rf&quot;</code>)</td>
+<td><code>final_imputed_data_micerf_1.csv</code> to
+<code>final_imputed_data_micerf_m.csv</code><br>→ Multiple imputed
+datasets (controlled by <code>mice_m</code>)<br>Fallback:
+<code>final_imputed_data_micerf_fallback.csv</code> if model fails</td>
+</tr>
+</tbody>
+</table>
 </div>
 </div>
 <div id="interpreting-results" class="section level2">
@@ -504,6 +549,14 @@ output directory, containing visualizations and detailed analysis of the
 imputation process.</p>
 <p><strong>Note:</strong> PDF report generation requires a working LaTeX
 installation (e.g., via the <code>tinytex</code> package).</p>
+<pre class="r"><code>if (!requireNamespace(&quot;tinytex&quot;, quietly = TRUE)) {
+  install.packages(&quot;tinytex&quot;)
+  library(tinytex)
+  tinytex::install_tinytex()
+} else if (!tinytex::is_tinytex()) {
+  # Package is installed, but TinyTeX distribution is not
+  tinytex::install_tinytex()
+}</code></pre>
 <pre class="r"><code># open genterated report
 report_path &lt;- file.path(dir_output, &quot;blood_imputation_report.pdf&quot;)
 if (file.exists(report_path)) {

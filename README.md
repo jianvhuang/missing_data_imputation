@@ -115,8 +115,21 @@ result <- run_imputation_analysis(
   user_defined_features = NULL,
   methods = c("rf", "mice")
 ) 
+
 list.files(dir_output)
+
+# List the generated imputed dataset
+list.files(file.path(dir_output, "imputed dataset"))
 ```
+The final imputed datasets are saved in the `imputed dataset/` folder within the specified output directory. The number and naming of output files depend on the selected imputation method:
+
+| Method                        | Output Files                                                                 |
+|------------------------------|------------------------------------------------------------------------------|
+| Random Forest (`"rf"`)       | `final_imputed_data_rf.csv`<br>→ One single imputed dataset                 |
+| KNN (`"knn"`)                | `final_imputed_data_knn_n=5.csv`<br>→ One file; `n` reflects selected `K`   |
+| MICE (`"mice"`)              | `final_imputed_data_mice_1.csv` to `final_imputed_data_mice_m.csv`<br>→ Multiple imputed datasets (controlled by `mice_m`) |
+| miceRanger (`"mice_rf"`)     | `final_imputed_data_micerf_1.csv` to `final_imputed_data_micerf_m.csv`<br>→ Multiple imputed datasets (controlled by `mice_m`)<br>Fallback: `final_imputed_data_micerf_fallback.csv` if model fails |
+
 
 ## Interpreting Results
 
@@ -131,6 +144,16 @@ The primary output of `run_imputation_analysis()` is a list containing:
 Additionally, the function generates a PDF report in the specified output directory, containing visualizations and detailed analysis of the imputation process.
 
 **Note:** PDF report generation requires a working LaTeX installation (e.g., via the `tinytex` package).
+```r
+if (!requireNamespace("tinytex", quietly = TRUE)) {
+  install.packages("tinytex")
+  library(tinytex)
+  tinytex::install_tinytex()
+} else if (!tinytex::is_tinytex()) {
+  # Package is installed, but TinyTeX distribution is not
+  tinytex::install_tinytex()
+}
+```
 
 ```r
 # open genterated report

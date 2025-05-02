@@ -66,7 +66,6 @@
 #'
 #' @export
 
-# 2.imputation.R
 MI_func <- function(data_selected,
                     dir_output,
                     info_vars = NULL,
@@ -81,6 +80,15 @@ MI_func <- function(data_selected,
                     niter = 10,
                     selected_features = NULL,
                     methods = c("rf", "knn", "mice", "mice_rf")) {
+  library(dplyr)
+  library(missForest)
+  library(DMwR2)
+  library(caret)
+  library(mice)
+  library(miceRanger)
+  library(ggplot2)
+  library(tidyr)
+  library(patchwork)
 
   if (!dir.exists(dir_output)) dir.create(dir_output, recursive = TRUE)
   dir_imputed <- file.path(dir_output, "imputed dataset")
@@ -308,6 +316,14 @@ MI_func <- function(data_selected,
             K_Value = best_knn$K,
             Missing_Rate = missing_rate
           ))
+        } else {
+          stop(paste0(
+            "\n========== ERROR: KNN FAILED ==========\n",
+            "All KNN imputation attempts returned NA at missing rate = ", missing_rate, ".\n",
+            "This likely indicates insufficient complete cases to find ", max(k_values), " neighbors.\n",
+            "Consider lowering the missing rate or removing 'knn' from methods.\n",
+            "=========================================\n"
+          ))
         }
       }
 
@@ -365,6 +381,8 @@ MI_func <- function(data_selected,
       ## miceRanger
       if("mice_rf" %in% methods) {
         cat("\nRunning miceRanger...\n")
+        micerf_success <- FALSE
+
         tryCatch({
           if (sum(!is.na(subset_train_data)) < nrow(subset_train_data) * 0.5 || ncol(subset_train_data) < 2) {
             cat("Insufficient data for miceRanger imputation\n")
@@ -531,11 +549,10 @@ MI_func <- function(data_selected,
                       var_dummy_cols <- orig_data_info$dummy_var_mapping[[var]]
 
                       if (all(var_dummy_cols %in% colnames(imputed_i_num))) {
-
                         dummy_matrix <- matrix(nrow = nrow(imputed_i_num), ncol = length(var_dummy_cols))
 
-                        for (i in 1:length(var_dummy_cols)) {
-                          dummy_matrix[, i] <- imputed_i_num[[var_dummy_cols[i]]]
+                        for (j in 1:length(var_dummy_cols)) {
+                          dummy_matrix[, j] <- imputed_i_num[[var_dummy_cols[j]]]
                         }
 
                         max_index <- apply(dummy_matrix, 1, which.max)
@@ -597,6 +614,8 @@ MI_func <- function(data_selected,
                   K_Value = NA,
                   Missing_Rate = missing_rate
                 ))
+
+                micerf_success <- TRUE
               } else {
                 cat("Failed to get completed data from miceRanger\n")
               }
@@ -607,6 +626,18 @@ MI_func <- function(data_selected,
         }, error = function(e) {
           cat("General error in miceRanger section:", e$message, "\n")
         })
+
+        if (!micerf_success && "mice_rf" %in% methods) {
+          cat("miceRanger failed completely, adding NA result for tracking\n")
+          results <- rbind(results, data.frame(
+            Method = "miceRanger",
+            Iteration = i,
+            MSE = NA,
+            Categorical_Accuracy = NA,
+            K_Value = NA,
+            Missing_Rate = missing_rate
+          ))
+        }
       }
     }
 
@@ -627,6 +658,10 @@ MI_func <- function(data_selected,
   }
 
   write.csv(agg_results_all, file.path(dir_output, "agg_results_all.csv"), row.names = FALSE)
+
+  if (nrow(agg_results_all) == 0) {
+    stop("No model results found — check if any method successfully ran.")
+  }
 
   # MSE & Accuracy Plot across Missing Rates
   p_mse <- ggplot(agg_results_all, aes(x = Missing_Rate, y = Average_MSE, color = Method)) +
@@ -650,13 +685,22 @@ MI_func <- function(data_selected,
   # ============ Start Imputation ============
   selected_missing_rate <- list_noNA[which.min(abs(list_noNA - raw_missing_rate))]
 
+
   best_model <- agg_results_all %>%
     filter(Missing_Rate == selected_missing_rate) %>%
     arrange(Average_MSE, desc(Average_Accuracy)) %>%
     slice(1)
 
-  data_selected_subset <- data_selected[, selected_features]
-  data_selected_subset <- as.data.frame(data_selected_subset)
+  # If the model is not selected at all, directly suspend the process
+  if (nrow(best_model) == 0 || is.null(best_model$Method) || is.na(best_model$Method)) {
+    stop(paste0(
+      "\n========== ERROR: BEST MODEL NOT FOUND ==========\n",
+      "No model could be selected for missing rate = ", selected_missing_rate, ".\n",
+      "This often happens when all models failed (e.g., KNN failure under high missing rate).\n",
+      "Please check `agg_results_all.csv` to see which methods succeeded.\n",
+      "==================================================\n"
+    ))
+  }
 
   # If the best model isn't one of the selected methods, choose the best among selected methods
   if (!(best_model$Method %in% selected_method_names)) {
@@ -678,6 +722,12 @@ MI_func <- function(data_selected,
   }
   cat("\n")
 
+  if (is.null(best_model) || is.null(best_model$Method)) {
+    stop("Best model could not be determined. Please check simulation results.")
+  }
+
+  data_selected_subset <- data_selected[, selected_features]
+  data_selected_subset <- as.data.frame(data_selected_subset)
 
   if (best_model$Method == "RandomForest") {
     final_imputed_data <- missForest(data_selected_subset, ntree = ntree, maxiter = maxiter)$ximp
@@ -867,8 +917,8 @@ MI_func <- function(data_selected,
                 if (all(var_dummy_cols %in% colnames(imputed_i_num))) {
                   dummy_matrix <- matrix(nrow = nrow(imputed_i_num), ncol = length(var_dummy_cols))
 
-                  for (i in 1:length(var_dummy_cols)) {
-                    dummy_matrix[, i] <- imputed_i_num[[var_dummy_cols[i]]]
+                  for (j in 1:length(var_dummy_cols)) {
+                    dummy_matrix[, j] <- imputed_i_num[[var_dummy_cols[j]]]
                   }
 
                   # Find the index of the maximum value of each row
