@@ -1,6 +1,6 @@
 ---
 title: "ImputationR: A Pipeline for Missing Data Imputation"
-author: "Your Name"
+author: "Gao Jingyi"
 date: "`r Sys.Date()`"
 output: 
   rmarkdown::html_vignette:
