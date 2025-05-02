@@ -22,6 +22,16 @@ if (! require("devtools")) install.packages("devtools")
 
 # Install ImputeR from GitHub
 devtools::install_github("jianvhuang/missing_data_imputation")
+
+# Install tinytex for generating PDF report
+if (!requireNamespace("tinytex", quietly = TRUE)) {
+  install.packages("tinytex")
+  library(tinytex)
+  tinytex::install_tinytex()
+} else if (!tinytex::is_tinytex()) {
+  # Package is installed, but TinyTeX distribution is not
+  tinytex::install_tinytex()
+}
 ```
 
 ## Example
@@ -143,17 +153,8 @@ The primary output of `run_imputation_analysis()` is a list containing:
 
 Additionally, the function generates a PDF report in the specified output directory, containing visualizations and detailed analysis of the imputation process.
 
-**Note:** PDF report generation requires a working LaTeX installation (e.g., via the `tinytex` package).
-```r
-if (!requireNamespace("tinytex", quietly = TRUE)) {
-  install.packages("tinytex")
-  library(tinytex)
-  tinytex::install_tinytex()
-} else if (!tinytex::is_tinytex()) {
-  # Package is installed, but TinyTeX distribution is not
-  tinytex::install_tinytex()
-}
-```
+**Note:** PDF report generation requires a working LaTeX installation (e.g., via the `tinytex` package, see the Installation section above).
+
 
 ```r
 # open genterated report
