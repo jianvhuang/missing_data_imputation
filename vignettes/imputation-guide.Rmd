@@ -54,7 +54,17 @@ if (!requireNamespace("devtools", quietly = TRUE)) {
 }
 
 # Install ImputationR from GitHub
-devtools::install_github("jianvhuang/missing_data_imputation")
+devtools::install_github("jianvhuang/missing_data_imputation", build_vignettes = TRUE)
+
+# Install tinytex for generating PDF report
+if (!requireNamespace("tinytex", quietly = TRUE)) {
+  install.packages("tinytex")
+  library(tinytex)
+  tinytex::install_tinytex()
+} else if (!tinytex::is_tinytex()) {
+  # Package is installed, but TinyTeX distribution is not
+  tinytex::install_tinytex()
+}
 ```
 
 The package requires several dependencies, which will be automatically installed:
@@ -345,16 +355,6 @@ The report includes:
 6. **Implementation Details**: Parameters used
 
 **Note:** PDF report generation requires a working LaTeX installation (e.g., via the `tinytex` package).
-```{r tinytex_install}
-if (!requireNamespace("tinytex", quietly = TRUE)) {
-  install.packages("tinytex")
-  library(tinytex)
-  tinytex::install_tinytex()
-} else if (!tinytex::is_tinytex()) {
-  # Package is installed, but TinyTeX distribution is not
-  tinytex::install_tinytex()
-}
-```
 
 ### Interpreting Visualizations
 
