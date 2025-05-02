@@ -75,7 +75,9 @@ library(ImputationR)
 ImputationR::load_imputation_dependencies()
 
 # Create output directory
-dir_output <- "../example"
+temp_dir <- tempdir()
+dir_output <- file.path(temp_dir, "imputation-blood")
+dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
 cat("Output will be saved to:", dir_output, "\n")
 ```
 
@@ -84,9 +86,10 @@ cat("Output will be saved to:", dir_output, "\n")
 The following sections describe the components of the `ImputationR` workflow in detail.
 
 ```{r load_data}
-# Users can download the csv file from the GitHub repository and store it in their own data directory.
+# Users can use the bundled CSV inside our package under inst/extdata
 # This example uses the blood_storage dataset from the medicaldata package. We introduce additional missing value for demonstration purpose.
-data <- read.csv("../data/blood_storage_add_missing.csv", check.names = FALSE)
+data_path <- system.file("extdata", "blood_storage_add_missing.csv", package = "ImputationR")
+data <- read.csv(data_path, check.names = FALSE)
 ```
 
 

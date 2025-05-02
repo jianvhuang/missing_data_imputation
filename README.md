@@ -53,13 +53,9 @@ dir_output <- file.path(temp_dir, "imputation-blood")
 dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
 cat("Output will be saved to:", dir_output, "\n")
 
-# Create data directory
-dir_data <- file.path(temp_dir, "data")
-dir.create(dir_data, recursive = TRUE, showWarnings = FALSE)
-cat("Input data will be loaded from:", dir_data, "\n")
-
-# Users can download the csv file from the GitHub repository and store it in their own data directory.
-data <- read.csv(paste0(dir_data,"/blood_storage_add_missing.csv"), check.names = FALSE)
+# Users can use the test CSV inside our package under inst/extdata
+data_path <- system.file("extdata", "blood_storage_add_missing.csv", package = "ImputationR")
+data <- read.csv(data_path, check.names = FALSE)
 
 # Define variable types
 # Store information column (demographic/identifier variables)

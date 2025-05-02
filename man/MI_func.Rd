@@ -52,7 +52,7 @@ MI_func(
 }
 \value{
 A list containing:
-\itemize{
+\describe{
 \item imputed_data: The final imputed dataset.
 \item all_imputations: A list of all imputed datasets (if using multiple imputation).
 \item performance: Performance metrics for each method.
