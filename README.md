@@ -128,7 +128,7 @@ result <- run_imputation_analysis(
   mice_maxit = 5,
   micer_num_trees = 50,
   user_defined_features = NULL,
-  methods = c("rf", "mice")
+   methods = c("rf", "knn", "mice", "mice_rf") # default methods
 ) 
 
 list.files(dir_output)
