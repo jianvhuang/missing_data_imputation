@@ -20,8 +20,8 @@ You can install the development version of ImputationR like so:
 # Install devtools (if not installed yet)
 if (! require("devtools")) install.packages("devtools")
 
-# Install ImputeR from GitHub
-devtools::install_github("jianvhuang/missing_data_imputation")
+# Install ImputationR from GitHub
+devtools::install_github("jianvhuang/missing_data_imputation", build_vignettes = TRUE)
 
 # Install tinytex for generating PDF report
 if (!requireNamespace("tinytex", quietly = TRUE)) {
