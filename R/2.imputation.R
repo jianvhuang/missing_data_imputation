@@ -308,24 +308,8 @@ MI_func <- function(data_selected,
 
         if (!all(is.na(knn_results$MSE))) {
           best_knn <- knn_results[which.min(knn_results$MSE), ]
-          results <- rbind(results, data.frame(
-            Method = "KNN",
-            Iteration = i,
-            MSE = best_knn$MSE,
-            Categorical_Accuracy = best_knn$Accuracy,
-            K_Value = best_knn$K,
-            Missing_Rate = missing_rate
-          ))
-        } else {
-          stop(paste0(
-            "\n========== ERROR: KNN FAILED ==========\n",
-            "All KNN imputation attempts returned NA at missing rate = ", missing_rate, ".\n",
-            "This likely indicates insufficient complete cases to find ", max(k_values), " neighbors.\n",
-            "Consider lowering the missing rate or removing 'knn' from methods.\n",
-            "=========================================\n"
-          ))
-        }
-      }
+          results <- rbind(results, data.frame(Method = "KNN", Iteration = i, MSE = best_knn$MSE, Categorical_Accuracy = best_knn$Accuracy, K_Value = best_knn$K, Missing_Rate = missing_rate))
+        }}
 
 
       ## MICE
@@ -1112,3 +1096,4 @@ MI_func <- function(data_selected,
     methods_used = methods
   ))
 }
+
