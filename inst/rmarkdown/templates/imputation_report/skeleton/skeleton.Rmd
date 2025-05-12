@@ -131,6 +131,30 @@ cat(paste0("- Methods used to simulate imputation (`methods`): ",
 ```{r load-performance}
 perf_path <- file.path(params$dir_output, params$performance_path)
 agg_results <- read_csv(perf_path)
+
+# Check which missing rates have KNN results
+all_missing_rates <- unique(agg_results$Missing_Rate)
+knn_missing_rates <- agg_results %>%
+  filter(Method == "KNN") %>%
+  pull(Missing_Rate) %>%
+  unique()
+
+# Find missing rates where KNN is NOT present (i.e., KNN failed)
+missing_knn_rates <- setdiff(all_missing_rates, knn_missing_rates)
+
+# Check if KNN was used and prepare message
+show_knn_note <- any(c("KNN", "knn") %in% params$methods_used) && length(missing_knn_rates) > 0
+```
+
+```{r knn-note, echo=FALSE, results='asis', eval=show_knn_note}
+if (show_knn_note) {
+  cat("**Note:** KNN could not be performed at the following missing rates due to insufficient complete cases for finding K nearest neighbors: ")
+  cat(paste(sprintf("%.2f", missing_knn_rates), collapse = ", "))
+  cat(".\n\n")
+}
+```
+
+```{r performance-table, echo=FALSE}
 kable(agg_results, caption = "Model Performance Across Missing Rates")
 ```
 
@@ -174,5 +198,6 @@ knitr::include_graphics(barplot_path)
     -   **Average MSE**: Lower is better for numeric variables.
     -   **Average Accuracy**: Higher is better for categorical variables.
     -   **Best K (KNN only)**: The value of `k` yielding best performance.
+    -   **KNN Limitations**: KNN may not appear in the results table at high missing rates due to insufficient complete cases needed to find k nearest neighbors. When KNN fails due to high missing rates, no results are recorded for that method at those missing rate levels.
 -   **Imputation Comparison**: Boxplots and density plots illustrate that the distribution of imputed values aligns well with original patterns.
 -   The imputation method with lowest MSE and high accuracy is applied to generate the final complete dataset.
