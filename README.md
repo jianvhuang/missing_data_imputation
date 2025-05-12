@@ -89,7 +89,7 @@ data_selected[continuous_vars] <- lapply(data_selected[continuous_vars], as.nume
 str(data_selected)
 ```
 
-## basic example code
+## Basic Example Code
 ### Using Individual Functions (Modular Workflow)
 
 You can use the individual functions for specific tasks:
