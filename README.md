@@ -90,18 +90,41 @@ str(data_selected)
 ```
 
 ## basic example code
-### Using Individual Functions
+### Using Individual Functions (Modular Workflow)
 
 You can use the individual functions for specific tasks:
 ```r
-# Analysis of missing values
+# Step 1: Analyze missing values
 missing_rate <- check_missing_values(data_selected, dir_output)
 cat("Overall missing rate:", missing_rate[[1]] * 100, "%\n")
 
-# Correlation analysis
+# Step 2: Check correlations among variables
 cor_vars <- check_correlation(data_selected, continuous_vars, dir_output)
 cat("Correlated variables:", paste(cor_vars, collapse = ", "), "\n")
 
+# Step 3: Run the multi-model imputation simulation
+mi_result <- MI_func(
+  data_selected = data_selected,
+  dir_output = dir_output, 
+  info_vars = NULL,
+  list_noNA = c(0.1, 0.2),
+  seed = 123,
+  niter = 2,
+  ntree = 50,
+  maxiter = 5,
+  k_values = c(3, 5, 7),
+  mice_m = 3,
+  mice_maxit = 5,
+  micer_num_trees = 50,
+  selected_features = NULL,
+  methods = c("rf", "knn", "mice", "mice_rf") # default methods
+  )
+```
+This modular approach gives you more flexibility and control when testing or debugging individual components.
+
+### Using run_imputation_analysis() (Integrated Workflow)
+Alternatively, you can use the `run_imputation_analysis()` function to execute the entire imputation pipeline in one step. This function internally calls the above steps — including missing value analysis, correlation checking, model comparison, and final imputation report generation — with a single command.
+```r                  
 # Run imputation analysis
 result <- run_imputation_analysis(
   data = data_selected,
@@ -124,7 +147,7 @@ result <- run_imputation_analysis(
   mice_maxit = 5,
   micer_num_trees = 50,
   user_defined_features = NULL,
-   methods = c("rf", "knn", "mice", "mice_rf") # default methods
+  methods = c("rf", "knn", "mice", "mice_rf") # default methods
 ) 
 
 list.files(dir_output)

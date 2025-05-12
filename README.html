@@ -389,8 +389,18 @@ report</li>
 <pre class="r"><code># Install devtools (if not installed yet)
 if (! require(&quot;devtools&quot;)) install.packages(&quot;devtools&quot;)
 
-# Install ImputeR from GitHub
-devtools::install_github(&quot;jianvhuang/missing_data_imputation&quot;)</code></pre>
+# Install ImputationR from GitHub
+devtools::install_github(&quot;jianvhuang/missing_data_imputation&quot;, build_vignettes = TRUE)
+
+# Install tinytex for generating PDF report
+if (!requireNamespace(&quot;tinytex&quot;, quietly = TRUE)) {
+  install.packages(&quot;tinytex&quot;)
+  library(tinytex)
+  tinytex::install_tinytex()
+} else if (!tinytex::is_tinytex()) {
+  # Package is installed, but TinyTeX distribution is not
+  tinytex::install_tinytex()
+}</code></pre>
 </div>
 <div id="example" class="section level2">
 <h2>Example</h2>
@@ -410,8 +420,9 @@ dir_output &lt;- file.path(temp_dir, &quot;imputation-blood&quot;)
 dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
 cat(&quot;Output will be saved to:&quot;, dir_output, &quot;\n&quot;)
 
-# Users can download the csv file from the GitHub repository and store it in their own data directory.
-data &lt;- read.csv(&quot;data/blood_storage_add_missing.csv&quot;, check.names = FALSE)
+# Users can use the test CSV inside our package under inst/extdata
+data_path &lt;- system.file(&quot;extdata&quot;, &quot;blood_storage_add_missing.csv&quot;, package = &quot;ImputationR&quot;)
+data &lt;- read.csv(data_path, check.names = FALSE)
 
 # Define variable types
 # Store information column (demographic/identifier variables)
@@ -446,18 +457,45 @@ str(data_selected)</code></pre>
 </div>
 <div id="basic-example-code" class="section level2">
 <h2>basic example code</h2>
-<div id="using-individual-functions" class="section level3">
-<h3>Using Individual Functions</h3>
+<div id="using-individual-functions-modular-workflow" class="section level3">
+<h3>Using Individual Functions (Modular Workflow)</h3>
 <p>You can use the individual functions for specific tasks:</p>
-<pre class="r"><code># Analysis of missing values
+<pre class="r"><code># Step 1: Analyze missing values
 missing_rate &lt;- check_missing_values(data_selected, dir_output)
 cat(&quot;Overall missing rate:&quot;, missing_rate[[1]] * 100, &quot;%\n&quot;)
 
-# Correlation analysis
+# Step 2: Check correlations among variables
 cor_vars &lt;- check_correlation(data_selected, continuous_vars, dir_output)
 cat(&quot;Correlated variables:&quot;, paste(cor_vars, collapse = &quot;, &quot;), &quot;\n&quot;)
 
-# Run imputation analysis
+# Step 3: Run the multi-model imputation simulation
+mi_result &lt;- MI_func(
+  data = data_selected,
+  dir_output = dir_output, 
+  info_vars = NULL,
+  list_noNA = c(0.1, 0.2),
+  seed = 123,
+  niter = 2,
+  ntree = 50,
+  maxiter = 5,
+  k_values = c(3, 5, 7),
+  mice_m = 3,
+  mice_maxit = 5,
+  micer_num_trees = 50,
+  selected_features = NULL,
+  methods = c(&quot;rf&quot;, &quot;knn&quot;, &quot;mice&quot;, &quot;mice_rf&quot;) # default methods
+  )</code></pre>
+<p>This modular approach gives you more flexibility and control when
+testing or debugging individual components.</p>
+</div>
+<div id="using-run_imputation_analysis-integrated-workflow" class="section level3">
+<h3>Using run_imputation_analysis() (Integrated Workflow)</h3>
+<p>Alternatively, you can use the <code>run_imputation_analysis()</code>
+function to execute the entire imputation pipeline in one step. This
+function internally calls the above steps — including missing value
+analysis, correlation checking, model comparison, and final imputation
+report generation — with a single command.</p>
+<pre class="r"><code># Run imputation analysis
 result &lt;- run_imputation_analysis(
   data = data_selected,
   continuous_vars = continuous_vars,
@@ -479,7 +517,7 @@ result &lt;- run_imputation_analysis(
   mice_maxit = 5,
   micer_num_trees = 50,
   user_defined_features = NULL,
-  methods = c(&quot;mice&quot;)
+  methods = c(&quot;rf&quot;, &quot;knn&quot;, &quot;mice&quot;, &quot;mice_rf&quot;) # default methods
 ) 
 
 list.files(dir_output)
@@ -548,15 +586,8 @@ data</li>
 output directory, containing visualizations and detailed analysis of the
 imputation process.</p>
 <p><strong>Note:</strong> PDF report generation requires a working LaTeX
-installation (e.g., via the <code>tinytex</code> package).</p>
-<pre class="r"><code>if (!requireNamespace(&quot;tinytex&quot;, quietly = TRUE)) {
-  install.packages(&quot;tinytex&quot;)
-  library(tinytex)
-  tinytex::install_tinytex()
-} else if (!tinytex::is_tinytex()) {
-  # Package is installed, but TinyTeX distribution is not
-  tinytex::install_tinytex()
-}</code></pre>
+installation (e.g., via the <code>tinytex</code> package, see the
+Installation section above).</p>
 <pre class="r"><code># open genterated report
 report_path &lt;- file.path(dir_output, &quot;blood_imputation_report.pdf&quot;)
 if (file.exists(report_path)) {

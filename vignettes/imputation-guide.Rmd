@@ -201,7 +201,7 @@ Variables with strong correlations are particularly useful for imputation, as th
 
 ### Method Comparison
 
-The `MI_func()` function (called by `run_imputation_analysis()`) compares multiple imputation methods:
+The `MI_func()` function compares multiple imputation methods:
 
 ```{r methods, warning=FALSE}
 result <- MI_func(data_selected = data_selected, 
@@ -286,6 +286,8 @@ Let's walk through a complete example using the `blood_storage` dataset from the
 Although the `blood_storage` dataset is an excellent example due to its diverse variable types (continuous, ordinal, and nominal), it has a very low original missing rate of only about 0.5%. 
 
 For demonstration purposes, we'll artificially introduce additional missing values to simulate a more realistic missing data scenario with a 15% missing rate. This better represents real-world data challenges and will better demonstrate the capabilities of the imputation methods.
+
+You can use the `run_imputation_analysis()` function to execute the entire imputation pipeline in one step. This function internally calls the above steps — including missing value analysis, correlation checking, model comparison, and final imputation report generation — with a single command.
 
 ```{r example, warning=FALSE}
 # Load required libraries
